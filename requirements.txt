@@ -1,0 +1,17 @@
+fastapi[all]
+uvicorn
+sqlalchemy
+psycopg2-binary
+pyspark
+mlflow
+langchain
+langchain-community
+langchain-ollama
+llama-index
+chromadb
+shap
+pandas
+python-dotenv
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
