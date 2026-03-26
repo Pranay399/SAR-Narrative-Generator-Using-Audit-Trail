@@ -19,7 +19,6 @@ class Settings:
 
     # For this specific debug session, let's just force it:
     DATABASE_URL = "sqlite:///./sar_app.db" 
-    print(f"📖 DEBUG: Using DATABASE_URL={DATABASE_URL}")
 
     # JWT Settings (for RBAC)
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-super-secret-key-for-development-only")

@@ -1,21 +1,13 @@
-import os
-print("\n" + "="*50)
-print(f"🚀 DEBUG: STARTING APP/MAIN.PY")
-print(f"📁 PATH: {os.path.abspath(__file__)}")
-print("="*50 + "\n")
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db.database import engine, Base
 from app.api.routes import auth, upload, cases, explanation
 
 # Create all DB tables on startup
-print("⏳ Initializing database...")
 try:
     Base.metadata.create_all(bind=engine)
-    print("✅ Database initialized successfully.")
 except Exception as e:
-    print(f"❌ Database initialization failed: {e}")
+    pass
 
 app = FastAPI(
     title="SAR Narrative Generator API",
