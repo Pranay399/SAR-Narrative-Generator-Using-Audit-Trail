@@ -1,6 +1,3 @@
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, sum as spark_sum, count as spark_count, when, unix_timestamp, lag, abs as spark_abs
-from pyspark.sql.window import Window
 from app.core.config import settings
 import json
 import os
@@ -10,17 +7,21 @@ import logging
 
 # Hard-disable Spark for this environment to avoid JVM getSubject thread crashes
 spark = None
-print("🚀 MODE: Using High-Performance Pandas AML Engine.")
+print("[Engine] MODE: Using High-Performance Pandas AML Engine.")
 
 def process_case_data(file_path: str, format: str = "csv"):
     """
     Ingests raw transaction data, cleans it, and applies AML Feature Engineering.
     Hardcoded to use Pandas for stability in the current demo environment.
     """
-    print(f"📁 Processing case data: {file_path}")
+    print(f"[Data] Processing case data: {file_path}")
     return _process_with_pandas(file_path, format)
 
 def _process_with_spark(file_path: str, format: str):
+    from pyspark.sql import SparkSession
+    from pyspark.sql.functions import col, sum as spark_sum, count as spark_count, when, unix_timestamp, lag, abs as spark_abs
+    from pyspark.sql.window import Window
+
     if format.lower() == "csv":
         df = spark.read.option("header", "true").csv(file_path)
     else:

@@ -23,7 +23,7 @@ class Settings:
     # JWT Settings (for RBAC)
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-super-secret-key-for-development-only")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours
     
     # LLM Settings
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -33,5 +33,7 @@ class Settings:
     # Spark Settings
     SPARK_APP_NAME: str = "SAR_AML_Engine"
     SPARK_MASTER: str = "local[*]"
+    
+
     
 settings = Settings()

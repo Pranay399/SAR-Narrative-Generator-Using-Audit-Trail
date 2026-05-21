@@ -1,4 +1,3 @@
-import mlflow
 import json
 
 def log_experiment(run_name: str, parameters: dict, metrics: dict, artifacts: dict = None):
@@ -7,6 +6,7 @@ def log_experiment(run_name: str, parameters: dict, metrics: dict, artifacts: di
     as specified in the architecture diagram.
     """
     try:
+        import mlflow
         with mlflow.start_run(run_name=run_name):
             # Log standard parameters (e.g. models used, thresholds)
             mlflow.log_params(parameters)

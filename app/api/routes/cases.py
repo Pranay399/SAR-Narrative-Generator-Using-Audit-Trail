@@ -8,6 +8,8 @@ from app.api.dependencies import get_current_active_user, require_role
 
 router = APIRouter()
 
+PRIVILEGED_ROLES = ["Analyst", "System Admin"]
+
 class NarrativeUpdate(BaseModel):
     narrative: str
     edit_reason: Optional[str] = "Manual review edit"
@@ -18,14 +20,15 @@ def list_cases(
     current_user: models.User = Depends(get_current_active_user)
 ):
     """
-    Lists cases. Analysts see only their own; Compliance Officers see all (Customer-level Isolation).
+    Lists cases. Analysts see only their own; Compliance Officers and
+    System Admins see all (Customer-level Isolation).
     """
-    if current_user.role == "Compliance Officer":
-        cases = db.query(models.CaseData).all()
+    if current_user.role in PRIVILEGED_ROLES:
+        cases = db.query(models.CaseData).order_by(models.CaseData.id.desc()).all()
     else:
         cases = db.query(models.CaseData).filter(
             models.CaseData.assigned_analyst_id == current_user.id
-        ).all()
+        ).order_by(models.CaseData.id.desc()).all()
 
     return [
         {
@@ -48,12 +51,14 @@ def get_case(
     case = db.query(models.CaseData).filter(models.CaseData.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
-    if current_user.role != "Compliance Officer" and case.assigned_analyst_id != current_user.id:
+    # Privileged roles see everything; analysts only see their own cases
+    if current_user.role not in PRIVILEGED_ROLES and case.assigned_analyst_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     return {
         "id": case.id,
         "case_reference": case.case_reference,
+        "customer_id": case.customer_id,
         "status": case.status,
         "generated_sar": case.generated_sar,
         "raw_data": case.raw_data,
@@ -67,10 +72,17 @@ def edit_narrative(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(get_current_active_user)
 ):
-    """Edit Narrative - allows analysts/compliance officers to refine the generated SAR text."""
+    """
+    Edit Narrative — Compliance Officers and System Admins can edit any case.
+    Analysts can only edit their own cases.
+    """
     case = db.query(models.CaseData).filter(models.CaseData.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
+
+    # Role-based edit access check
+    if current_user.role not in PRIVILEGED_ROLES and case.assigned_analyst_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only edit your own cases")
 
     case.generated_sar = update.narrative
     case.status = "Reviewed"
@@ -97,6 +109,8 @@ def download_sar_report(
     case = db.query(models.CaseData).filter(models.CaseData.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
+    if current_user.role not in PRIVILEGED_ROLES and case.assigned_analyst_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
     if not case.generated_sar:
         raise HTTPException(status_code=400, detail="SAR has not been generated yet.")
 
@@ -112,3 +126,4 @@ Generated On  : {case.created_at}
 {case.generated_sar}
 """
     return report_text
+

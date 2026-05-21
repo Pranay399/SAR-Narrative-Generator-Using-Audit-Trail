@@ -7,6 +7,7 @@ from app.db import database, models
 from app.api.dependencies import get_current_active_user
 from app.engine.processing import process_case_data
 from app.engine.tracking import log_experiment
+
 from app.llm.rag import initialize_rag_pipeline, retrieve_aml_context
 from app.llm.chains import generate_sar_narrative
 
@@ -20,21 +21,30 @@ rag_index = initialize_rag_pipeline()
 
 def _run_pipeline(file_path: str, case_id: int, db: Session):
     """Background task: runs the full AML + LLM pipeline on an uploaded file."""
-    print(f"🎬 Starting background pipeline for Case ID: {case_id}")
+    print(f"🎬 Starting background pipeline for Case ID: {case_id} (Engine: Local Hybrid)")
     try:
         case = db.query(models.CaseData).filter(models.CaseData.id == case_id).first()
         if not case:
             print("❌ Case not found in database.")
             return
 
-        print("🔍 Step 1: Running AML Feature Engineering...")
         file_ext = os.path.splitext(file_path)[1].lower().lstrip(".")
+
+        print("🔍 Step 1: Running Local AML Feature Engineering...")
         features = process_case_data(file_path, format=file_ext)
+            
         print(f"✅ Features engineered: {len(features)} records.")
 
         print("📚 Step 2: Retrieving AML Context (RAG)...")
+        # Standardize customer_id from features if available
+        cust_id = "PENDING"
+        if features:
+            cust_id = features[0].get("account_id", "PENDING")
+            case.customer_id = str(cust_id)
+            db.commit()
+
         aml_context = retrieve_aml_context(
-            f"Suspicious activity: smurfing and rapid movements for account {case.customer_id}",
+            f"Suspicious activity: smurfing and rapid movements for account {cust_id}",
             rag_index
         )
         print("✅ RAG context retrieved.")
@@ -45,7 +55,7 @@ def _run_pipeline(file_path: str, case_id: int, db: Session):
 
         print("💾 Step 4: Saving results and updating status...")
         case.generated_sar = narrative
-        case.raw_data = {"features": features}
+        case.raw_data = {"features": features, "engine": "local"}
         case.status = "Generated"
         db.commit()
 
@@ -57,12 +67,13 @@ def _run_pipeline(file_path: str, case_id: int, db: Session):
                 "foreign_transfers": features[0].get("total_foreign_transfers", 0) if features else 0,
             }
         )
+        audit_msg = f"Narrative generated via local Pandas Engine with {len(features)} feature rows."
 
         audit = models.AuditLog(
             case_id=case.id,
             user_id=case.assigned_analyst_id,
             action="SAR_GENERATED",
-            details=f"Narrative generated via Ollama llama3.1 with {len(features)} feature rows."
+            details=audit_msg
         )
         db.add(audit)
         db.commit()
@@ -84,8 +95,15 @@ async def upload_suspicious_case(
 ):
     """
     Upload a suspicious case file (CSV or JSON with transaction data).
-    Triggers the PySpark AML processing + LangChain SAR generation pipeline in the background.
+    Triggers the local AML processing + LangChain SAR generation pipeline in the background.
+    Only Compliance Officers and System Admins may upload cases.
     """
+    if current_user.role == "Analyst":
+        raise HTTPException(
+            status_code=403,
+            detail="Analysts have read-only access. Only Compliance Officers may upload cases."
+        )
+
     if not file.filename.endswith((".csv", ".json")):
         raise HTTPException(status_code=400, detail="Only CSV and JSON files are accepted.")
 
